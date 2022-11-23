@@ -1,0 +1,14 @@
+- You mention a repair log.  Any thoughts on where you'll store that log, whether a data structure, a file, or a database?
+
+- On underservedPostalByPopulation, you mention confusion on the hierarchy of postal codes.  It's not absolutely necessary for the assignment.  Still, here are a few more details.
+
+A full postal code looks like B6K 3H2.  That postal code might cover one city block or one apartment building.  If I talked about a trucation like "B6K 3H" then I would be talking about possibly 10 postal codes: B6K 3H0, B6K 3H1, B6K 3H2, and so on to B6K 3H9.
+
+The assignment can give you details for each full postal code, or it might just tell you that "B3M" is a general postal code region (encompassing many smaller full postal codes) whose population is X and area is Y in total.  You are given, though, that we won't give you data that overlaps in region.  So, we won't give you both B3H and B3H 4K2 as different postal codes since one is inside the other.
+
+If you look at the problem itself, nothing uses the hierarchy directly, which is why the hierarchy itself shouldn't be a barrier to your moving forward with the project.
+
+- On the project analysis, you've summarized the statement of each method into your own words.  That's a good start.  However, you should take it a bit further into thinking about how all these come together, what their data is, how you'll store that data, what algorithms you might need, whether done on your own or by a database, etc.
+
+You don't have quite enough level of detail for me to be able to provide you with advice on whether your understanding of the project is going in a good direction or not.
+
