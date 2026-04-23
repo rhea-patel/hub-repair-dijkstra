@@ -1,315 +1,201 @@
 package ps.csci3901;
-import java.sql.*;
-import java.util.Properties;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.PriorityQueue;
+import java.util.Set;
 
+/**
+ * PowerService builds a weighted graph of electricity towers (hubs) and roads between them.
+ * It uses Dijkstra's algorithm to compute the shortest path for the repair worker.
+ */
 public class PowerService {
-public  Scanner scanner = new.Scanner(System.in);
-        public static Connection connection = null;
-        public static Statement statement = null;
-        public Resultset result= null;
-        public PowerService{
+
+    private final Map<String, List<Edge>> graph = new HashMap<>();
+
+    public void addTower(String towerId) {
+        graph.computeIfAbsent(towerId, ignored -> new ArrayList<>());
     }
-    // Add postal code , population and area from user.
-        public boolean addPostalCode (String Postalcodes, int population, int area, Object args) throws SQLException {
-            // Executing the SQL Query
 
-            String sql1=" Insert into Postalcode" +
-                    "(Postalcodes,population,area)" +
-                    "values (?,?,?)";
-            // Open the sql connection
-            PreparedStatement ps = connection.prepareStatement("use riyap;");
-            // Taking inputs from user
-            System.out.println("Enter Postalcode: \n");
-            ps.setString(1, scanner.nextLine());
+    /**
+     * Adds an undirected road between two towers with a non-negative distance.
+     */
+    public void addRoad(String fromTower, String toTower, int distance) {
+        if (distance < 0) {
+            throw new IllegalArgumentException("Dijkstra requires non-negative edge weights.");
+        }
+        addTower(fromTower);
+        addTower(toTower);
 
-            System.out.println("Enter population: \n");
-            ps.setInt(2, Int.parseInt(scanner.nextLine());
+        graph.get(fromTower).add(new Edge(toTower, distance));
+        graph.get(toTower).add(new Edge(fromTower, distance));
+    }
 
-            System.out.println("Enter Area: \n");
-            ps.setInt(3, Int.parseInt(scanner.nextLine());
+    /**
+     * Returns the shortest route between startTower and targetTower.
+     */
+    public PathResult shortestPath(String startTower, String targetTower) {
+        if (!graph.containsKey(startTower) || !graph.containsKey(targetTower)) {
+            return PathResult.unreachable(startTower, targetTower);
+        }
 
-              int rows= ps.execute("use riyap;");
-            //Check the rows affected
-              if (rows>o){
-                  System.out.println("Record done successfully and is unique.\n");
-              }
-            // close the sql connection
-                ps.close("use riyap;");
+        Map<String, Integer> distance = new HashMap<>();
+        Map<String, String> previous = new HashMap<>();
+        Set<String> visited = new HashSet<>();
 
-                return false;
+        for (String tower : graph.keySet()) {
+            distance.put(tower, Integer.MAX_VALUE);
+        }
+        distance.put(startTower, 0);
+
+        PriorityQueue<NodeDistance> pq = new PriorityQueue<>(Comparator.comparingInt(NodeDistance::distance));
+        pq.offer(new NodeDistance(startTower, 0));
+
+        while (!pq.isEmpty()) {
+            NodeDistance current = pq.poll();
+            if (!visited.add(current.node())) {
+                continue;
             }
-            // Add the hub with point loction in form of coordinate and set serviced areasfrom the user input.
-            public boolean addDistributionHub ( String hubIdentifier, Point location, Set servicedAreas )throws SQLException{
-                // Executing the SQL Query
-                String sql2=" Insert into DistributerHub"+
-                        "(HubIdentifier,location,servicesareas)" +
-                        "values (?,?,?)";
-                // Open the sql connection
-                PreparedStatement ps1 = connection.prepareStatement("use riyap;");
-                // Taking inputs from user
-                System.out.println("Enter Hub: \n");
-                ps1.setString(1, scanner.nextLine());
+            if (current.node().equals(targetTower)) {
+                break;
+            }
 
-                System.out.println("Enter Location: \n");
-                ps1.setInt(2, scanner.nextLine() );
-
-                System.out.println("Enter Setvice Area: \n");
-                ps1.setInt(3, scanner.nextLine());
-
-                int rows= ps1.execute("use riyap;");
-                //Check the rows affected
-                if (rows>o){
-                    System.out.println("Record done successfully and is unique.\n");
+            for (Edge edge : graph.getOrDefault(current.node(), Collections.emptyList())) {
+                if (visited.contains(edge.to())) {
+                    continue;
                 }
-                // close the sql connection
-                ps1.close("use riyap;");
-
-                return false;
+                int candidate = distance.get(current.node()) + edge.distance();
+                if (candidate < distance.get(edge.to())) {
+                    distance.put(edge.to(), candidate);
+                    previous.put(edge.to(), current.node());
+                    pq.offer(new NodeDistance(edge.to(), candidate));
+                }
             }
+        }
+
+        if (distance.get(targetTower) == Integer.MAX_VALUE) {
+            return PathResult.unreachable(startTower, targetTower);
+        }
+
+        List<String> route = new ArrayList<>();
+        for (String at = targetTower; at != null; at = previous.get(at)) {
+            route.add(at);
+        }
+        Collections.reverse(route);
+        return PathResult.reachable(startTower, targetTower, route, distance.get(targetTower));
     }
-    // Add repaire Estimate time to realte with each hub
-    public void hubDamage ( String hubIdentifier, float repairEstimate )throws SQLSyntaxErrorException{
 
-        // Executing the SQL Query
-        String sql3=" Insert into hubDamage"+
-                "(hub Identifier,repairTime)" +
-                "values (?,?,?)";
-
-        // Open the sql connection
-        PreparedStatement ps2 = connection.prepareStatement("use riyap;");
-
-        // Taking inputs from user
-        System.out.println("Enter Hub which is damaged: \n");
-        ps3.setString(1, scanner.nextLine());
-
-        System.out.println("Enter Estimated Time required for Hub Repair: \n");
-        ps3.setInt(2, Int.parseInt(scanner.nextLine());
-        int rows= ps3.execute("use riyap;");
-
-        //Check the rows affected
-        if (rows>o){
-            System.out.println("Record done successfully.\n");
+    /**
+     * Optional helper: determine which damaged tower should be repaired first from a given location.
+     */
+    public List<HubImpact> prioritizeDamagedTowers(String repairmanTower, List<String> damagedTowers) {
+        List<HubImpact> impacts = new ArrayList<>();
+        for (String damaged : damagedTowers) {
+            PathResult result = shortestPath(repairmanTower, damaged);
+            if (result.isReachable()) {
+                impacts.add(new HubImpact(damaged, result.getTotalDistance(), result.getPath()));
+            }
         }
-
-        // close the sql connection
-        ps3.close("use riyap;");
+        impacts.sort(Comparator.comparingInt(HubImpact::distance));
+        return impacts;
     }
- // Add employeeID who has repaierd the particular hub.
-   public void hubRepair( String hubIdentifier, String employeeId, float repairTime, boolean inService ){
 
-        // Executing the SQL Query
-        String sql4=" Insert into hubRepair"+
-                "(hubidentifier,employeeID,repairTime)"
-                +"values (?,?,?)";
+    public static void main(String[] args) {
+        PowerService service = new PowerService();
 
-        // Open the sql connection
-        PreparedStatement ps2 = connection.prepareStatement("use riyap;");
+        // Example graph of towers after hurricane damage.
+        service.addRoad("HUB_A", "HUB_B", 5);
+        service.addRoad("HUB_A", "HUB_C", 2);
+        service.addRoad("HUB_C", "HUB_B", 1);
+        service.addRoad("HUB_B", "HUB_D", 3);
+        service.addRoad("HUB_C", "HUB_D", 8);
+        service.addRoad("HUB_D", "HUB_E", 2);
 
-        // Taking inputs from user
-        System.out.println("Enter The employeeID: \n");
-        ps4.setString(1, Int.parseInt(scanner.nextLine());
-        System.out.println("Enter the hub repaired by employee: \n");
-        ps4.setInt(2,scanner.nextLine());
-        int rows= ps3.execute("use riyap;");
-
-        //Check the rows affected
-        if (rows>o){
-            System.out.println("Record done successfully.\n");
+        PathResult bestRoute = service.shortestPath("HUB_A", "HUB_E");
+        if (bestRoute.isReachable()) {
+            System.out.println("Shortest path: " + bestRoute.getPath());
+            System.out.println("Total distance: " + bestRoute.getTotalDistance());
+        } else {
+            System.out.println("No route found from " + bestRoute.getStartTower() + " to " + bestRoute.getTargetTower());
         }
-        else {
-            System.out.println("Entered Hub is not repaired YET");
-        }
-
-        // close the sql connection
-        ps3.close("use riyap;");
     }
-// Fetch how many poeple are currently out of power service.
-    public int peopleOutOfService () throw SQLException{
 
-        // Executing the SQL Query
-        String sql5="  SELECT" +
-        " Postalcode.Postalcodes, DistributionHub.hubidentifier, hubdamage.damagedhub" +
-        "From " +
-        "Postalcode, DistributionHub, hubdamage"+
-        " WHERE  " +
-        "DistributionHub.hubidentifier=hubdamage.damagedhub " +
-        "AND" +
-        " (Select sum(count(population) from Postalcode" +
-        "WHERE" +
-        " Postalcode.Postalcodes=DistributionHub.hubidentifier)"+
-        "Group by" +
-        " hubdamage Having Count(HubIdentifier=1/PostalCodes)";
+    private record Edge(String to, int distance) {}
 
-        // Storing the result in tResultSet
-        populationResultSet = statement.executeQuery(sql5);
+    private record NodeDistance(String node, int distance) {}
 
-        // Open the sql connection
-       Statement statement=connection.createStatement("use riyap");
-       Resultset result= statement.execute("use riyap");
+    public static final class PathResult {
+        private final String startTower;
+        private final String targetTower;
+        private final List<String> path;
+        private final int totalDistance;
+        private final boolean reachable;
 
-       while (result.next()){
-           int population = result.getInt("population");
-           System.out.println(" Total number of people out of service : /n"+ populationResultSet);
+        private PathResult(String startTower, String targetTower, List<String> path, int totalDistance, boolean reachable) {
+            this.startTower = startTower;
+            this.targetTower = targetTower;
+            this.path = path;
+            this.totalDistance = totalDistance;
+            this.reachable = reachable;
         }
 
-        //Check the rows affected
-        if (rows>o){
-            System.out.println("Record done successfully.\n");
+        public static PathResult reachable(String startTower, String targetTower, List<String> path, int totalDistance) {
+            return new PathResult(startTower, targetTower, List.copyOf(path), totalDistance, true);
         }
 
-        // close the sql connection
-        ps3.close("use riyap;");
+        public static PathResult unreachable(String startTower, String targetTower) {
+            return new PathResult(startTower, targetTower, List.of(), Integer.MAX_VALUE, false);
+        }
+
+        public String getStartTower() {
+            return startTower;
+        }
+
+        public String getTargetTower() {
+            return targetTower;
+        }
+
+        public List<String> getPath() {
+            return path;
+        }
+
+        public int getTotalDistance() {
+            return totalDistance;
+        }
+
+        public boolean isReachable() {
+            return reachable;
+        }
+
+        @Override
+        public String toString() {
+            if (!reachable) {
+                return "PathResult{unreachable from " + startTower + " to " + targetTower + "}";
+            }
+            return "PathResult{" +
+                    "startTower='" + startTower + '\'' +
+                    ", targetTower='" + targetTower + '\'' +
+                    ", path=" + path +
+                    ", totalDistance=" + totalDistance +
+                    '}';
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof PathResult that)) return false;
+            return totalDistance == that.totalDistance && reachable == that.reachable && Objects.equals(startTower, that.startTower) && Objects.equals(targetTower, that.targetTower) && Objects.equals(path, that.path);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(startTower, targetTower, path, totalDistance, reachable);
+        }
     }
-   // Fetch the rate of service Restoration with the help of Postalcode, Repaire Time and Increment.
-    public List<Integer> rateOfServiceRestoration (float increment ){
-       public list rateOfServiceRestoration = null;
-        try {
-        Statement statement = .createStatement ( );
-      // Executing the SQL Query for Joining the tables
-        String s ="select *\n" +
-        "from (" +
-        "(Postalcode inner join DistributionHub " +
-        "on " +
-        "Postalcode.Postalcodes=DistributionHub.Postalcodes)\n" +
-        "inner join " +
-        "hubdamage " +
-        "on " +
-        "DistributionHub.HubIdentifier= hubdamage.HubIdentifier)";
-
-        ResultSet rs = statement.executeQuery( String.valueOf (rateOfServiceRestoration) );
-        while (rs.next()) {
-        rateOfServiceRestoration. add(rs.getFloat( "rateofservicerestoration" ));
-        }
-        // close the sql connection
-        rs.close("use riyap");
-        } catch (Exception e) {
-        System.out.println(e);
-        }
-        return rateOfServiceRestoration ;
-        }
-    // Fetch the information of list of postal code which are still under served after repain plan implementation with the help of population.
-     public List underservedPostalByPopulation ( int limit )throws SQLException{
-
-        List<String> underservedPostalByPopulation = new ArrayList<String>();
-        Iterable<? extends String> populationResultset = null;
-        for (String Postalcodes : populationResultset) {
-        underservedPostalByPopulation.add
-        ( String.valueOf( new Object[]{populationResultset} ) );
-      final boolean add;
-        add = true;
-        }
-        // Executing the SQL Query
-        List<Postalcode> population = String.Sql;
-        String sql="" + "";
-
-        (rs, rowNum) -> new Postalcode(rs.getInt("population"), rs.getString("Postalcodes"),);
-
-        // Open the sql connection
-        try (Statement statement = connection.createStatement()) {
-        result = statement.execute("use riyap");
-        }
-        while (result.nextLine()){
-        int population = result.getInt("population");
-        System.out.println(" Total number of people out of service : /n"+ populationResultSet);
-        }
-        // close the sql connection
-        statement.close();
-        return underservedPostalByPopulation();
-        }
-// Fetch the information of list of postal code which are still under served after repain plan implementation with the help of Area.
-       public List underservedPostalByArea ( int limit )throws SQLException{
-
-        List<String> underservedPostalByArea = new ArrayList<String>();
-        Iterable<? extends String> areaResultset = null;
-        for (String Postalcodes : areaResultset) {
-        underservedPostalByArea.add
-        ( String.valueOf( new Object[]{AreaResultset} ) );
-
-        // Executing the SQL Query
-        List<Postalcode> area = String.Sql;
-        String sql="" + "";
-
-        (rs, rowNum)  new Postalcode(rs.getInt("area"), rs.getString("Postalcodes"),);
-
-        // Open the sql connection
-        try (Statement statement = connection.createStatement()) {
-        result = statement.execute("use riyap");
-        }
-        while (result.nextLine()){
-        int population = result.getInt("population");
-        System.out.println(" Total number of people out of service : /n"+ areaResultSet);
-        }
-        // close the sql connection
-        statement.close();
-        }
-    public static void main (String[] args )  {
-
-    PowerService powerservice= new PowerService();
-
-    // Connecting to Dal Database
-
-    try{
-        Class.forName( "com.mysql.cj.jdbc.Driver" );
-        String dbURL="jdbc:mysql://db.cs.dal.ca:3306/jdbcdb";
-        String CSID="riyap";
-        String BANNER_ID="B00930901";
-        connection = DriverManager.getConnection( ("jdbc:mysql://db.cs.dal.ca:3306/csci3901/riyap",dbURL, CSID,BANNER_ID );
-        statement.execute( "use riyap;" );
-
-       // Getting user input choice for Data Storing.
-
-        System.out.println("Enter choice\n" );
-       int choice =Integer.parseInt(scanner.nextLine());
-       switch(choice){
-            case 1:
-                System.out.println("1. Insert Postalcode Information \n");
-                powerservice.addPostalCode();
-                break;
-                case 2:
-                    System.out.println("2. Insert Hub Information\n");
-                    powerservice.addDistributionHub();
-                    break;
-           case 3:
-               System.out.println("3. Enter The damaged Hub: \n");
-               powerservice.hubDamage(  );
-               break;
-           case 4:
-               System.out.println("4. Enter the Hub repaired (Only for Power Service Employees: )\n");
-               powerservice.hubRepair( );
-               break;
-           case 5:
-               System.out.println("5.Enter 5 to find out how many people are out of service: \n");
-               powerservice.peopleOutOfService ();
-               break;
-               case 6:
-                   System.out.println("6. Enter 6 to find the rate of service will restore : )\n");
-                   powerservice.rateofServiceRestoration();
-                   break;
-           case 7:
-            System.out.println("7 Enter 7 to find the under served postal codes on basis of population: )\n");
-            powerservice.underservedPostalByPopulation();
-               break;
-           case 8:
-             System.out.println("8. Enter 8 to find the under served postal codes on basis of area : )\n");
-             powerservice.underservedPostalByArea();
-               break;
-
-               default:
-                break;
-        }
 }
-    catch(Exception e){
-    throw new RuntimeException("Something went wrong");
-        System.out.println("Connection failed");
-        System.out.println(e.getMessage());
-        }
-
-   }
-}
-
-
